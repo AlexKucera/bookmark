@@ -23,11 +23,88 @@ export class BookmarkManager {
         };
     }
 
+    getFirstVisibleLine(editor: Editor): number {
+        try {
+            // For edit mode, use percentage-based approach like preview mode
+            const scrollInfo = editor.getScrollInfo() as any;
+            const totalLines = editor.lineCount();
+
+            // Get scroll information - try multiple properties to find total content height
+            const scrollTop = scrollInfo.top;
+            const viewportHeight = scrollInfo.clientHeight || 600;
+
+            // Try to get total document height from CodeMirror
+            let totalContentHeight = scrollInfo.scrollHeight || scrollInfo.height;
+
+            // Try alternative methods to get document height
+            if (totalContentHeight <= viewportHeight) {
+                // Try to get the actual document height from various DOM elements
+                try {
+                    // Try CodeMirror 6 approach first
+                    const editorView = (editor as any).cm;
+                    if (editorView && editorView.dom) {
+                        totalContentHeight = editorView.dom.scrollHeight || totalContentHeight;
+                    }
+
+                    // If that doesn't work, try to find the scroll container
+                    if (totalContentHeight <= viewportHeight) {
+                        const containerEl = (editor as any).containerEl;
+                        if (containerEl) {
+                            const scrollEl = containerEl.querySelector('.cm-editor') ||
+                                           containerEl.querySelector('.cm-scroller') ||
+                                           containerEl.querySelector('[contenteditable]');
+                            if (scrollEl) {
+                                totalContentHeight = scrollEl.scrollHeight || totalContentHeight;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.log('Error getting DOM scroll height:', e);
+                }
+            }
+
+            console.log('Edit mode detection: scroll top:', scrollTop, 'viewport height:', viewportHeight);
+            console.log('scrollInfo properties:', Object.keys(scrollInfo));
+            console.log('scrollHeight:', scrollInfo.scrollHeight, 'height:', scrollInfo.height);
+            console.log('Total content height after CM check:', totalContentHeight);
+
+            // Calculate scroll percentage
+            let scrollPercentage: number;
+            if (totalContentHeight > viewportHeight) {
+                // Calculate percentage of total scrollable area
+                const maxScroll = totalContentHeight - viewportHeight;
+                scrollPercentage = scrollTop / maxScroll;
+            } else {
+                // Document fits in viewport, estimate based on line distribution
+                // If scrollTop > 0 but no scrollable area, estimate percentage
+                scrollPercentage = Math.min(scrollTop / (totalLines * 34), 1); // assume ~34px per line
+            }
+
+            // Convert percentage to line number
+            const estimatedLine = Math.floor(scrollPercentage * totalLines);
+
+            console.log('Total content height:', totalContentHeight, 'max scroll:', totalContentHeight - viewportHeight);
+            console.log('Scroll percentage:', scrollPercentage, 'estimated line:', estimatedLine, 'of', totalLines);
+
+            // Ensure within bounds
+            return Math.min(Math.max(0, estimatedLine), totalLines - 1);
+        } catch (e) {
+            console.error('Error in getFirstVisibleLine:', e);
+        }
+
+        // Fallback to line 0
+        console.log('Fallback to line 0');
+        return 0;
+    }
+
     insertBookmark(editor: Editor, lineNumber?: number): void {
-        // Get cursor position if lineNumber not provided
+        // Preserve current scroll position
+        const scrollInfo = editor.getScrollInfo();
+        const originalScrollTop = scrollInfo.top;
+
+        // Get visible line if lineNumber not provided
         if (lineNumber === undefined) {
-            const cursorPos = editor.getCursor();
-            lineNumber = cursorPos.line;
+            lineNumber = this.getFirstVisibleLine(editor);
         }
 
         // Protect against YAML frontmatter
@@ -52,6 +129,11 @@ export class BookmarkManager {
             // Insert at the end of the current line
             editor.setLine(lineNumber, line + ' ' + BOOKMARK_MARKER);
         }
+
+        // Restore original scroll position after a brief delay
+        setTimeout(() => {
+            editor.scrollTo(null, originalScrollTop);
+        }, 10);
     }
 
     removeBookmark(editor: Editor): void {
@@ -93,14 +175,33 @@ export class BookmarkManager {
         return lineNumber;
     }
 
-    jumpToBookmark(editor: Editor, lineNumber: number): void {
+    jumpToBookmark(editor: Editor, lineNumber: number, view?: any): void {
         const pos = { line: lineNumber, ch: 0 };
-        editor.setCursor(pos);
 
-        // Delay scrollIntoView to ensure cursor is set first
-        setTimeout(() => {
-            editor.scrollIntoView({ from: pos, to: pos }, true);
-        }, 50);
+        // Check if we have view context and are in preview mode
+        if (view && view.getMode && view.getMode() === 'preview') {
+            // In preview mode, calculate scroll position and use preview scroll
+            try {
+                const totalLines = editor.lineCount();
+                const scrollPercentage = lineNumber / totalLines;
+                const targetScroll = scrollPercentage * 100; // Convert to percentage
+
+                console.log('Preview mode jump: line', lineNumber, 'of', totalLines, '-> scroll to', targetScroll + '%');
+
+                // Use preview mode scrolling
+                view.previewMode.applyScroll(targetScroll);
+            } catch (e) {
+                console.error('Error jumping to bookmark in preview mode:', e);
+            }
+        } else {
+            // Edit mode - use editor methods
+            editor.setCursor(pos);
+
+            // Delay scrollIntoView to ensure cursor is set first
+            setTimeout(() => {
+                editor.scrollIntoView({ from: pos, to: pos }, true);
+            }, 50);
+        }
     }
 
     checkForMultipleBookmarks(content: string): boolean {
