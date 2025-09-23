@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.1] - 2025-09-23
+
+### Changed
+- Renamed plugin ID from "bookmark-plugin" to "bookmark" for cleaner folder organization
+- Renamed plugin display name from "Bookmark Plugin" to "Bookmark" for reduced UI clutter
+- Updated all documentation URLs to reflect new repository naming
+
 ## [1.0.0] - 2025-09-23
 
 ### Added
@@ -24,5 +31,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Header action button with dynamic icon states
 - HTML marker-based bookmark storage for persistence
 
-[Unreleased]: https://github.com/AlexKucera/bookmark/compare/1.0.0...HEAD
+[Unreleased]: https://github.com/AlexKucera/bookmark/compare/1.0.1...HEAD
+[1.0.1]: https://github.com/AlexKucera/bookmark/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/AlexKucera/bookmark/releases/tag/1.0.0
