@@ -1,8 +1,39 @@
-/*
+/* Bookmark plugin styles */
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+/* Style for bookmarked lines */
+.cm-bookmark-line {
+    position: relative;
+}
 
-If your plugin does not need CSS, delete this file.
+/* Add bookmark icon in the gutter area */
+.cm-bookmark-line::before {
+    content: '📖';
+    position: absolute;
+    left: -30px;
+    font-size: 12px;
+    color: var(--text-accent);
+    z-index: 1;
+    pointer-events: none;
+}
 
-*/
+/* Alternative bookmark marker styles for different themes */
+.theme-dark .cm-bookmark-line::before {
+    color: var(--text-accent);
+}
+
+.theme-light .cm-bookmark-line::before {
+    color: var(--text-accent);
+}
+
+/* Ensure the bookmark icon doesn't interfere with line numbers */
+.cm-editor .cm-bookmark-line::before {
+    left: -30px;
+}
+
+/* Optional: Add subtle background highlight to bookmarked lines */
+.cm-bookmark-line {
+    background-color: rgba(var(--color-accent-rgb), 0.1);
+    border-left: 2px solid var(--color-accent);
+    padding-left: 4px;
+    margin-left: -6px;
+}

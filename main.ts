@@ -1,134 +1,115 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+// ABOUTME: Main plugin entry point for Obsidian bookmark plugin
+// ABOUTME: Coordinates bookmark functionality across views and handles lifecycle
 
-// Remember to rename these classes and interfaces!
+import { MarkdownView, Plugin } from 'obsidian';
+import { BookmarkManager } from './bookmarkManager';
+import { ViewActionManager } from './viewActionManager';
+import { GutterDecorationManager } from './gutterDecoration';
 
-interface MyPluginSettings {
-	mySetting: string;
-}
-
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
-}
-
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+export default class BookmarkPlugin extends Plugin {
+	private bookmarkManager: BookmarkManager;
+	private viewActionManager: ViewActionManager;
+	private gutterManager: GutterDecorationManager;
 
 	async onload() {
-		await this.loadSettings();
+		// Initialize managers
+		this.bookmarkManager = new BookmarkManager();
+		this.viewActionManager = new ViewActionManager();
+		this.gutterManager = new GutterDecorationManager();
 
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (_evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
+		// Register editor extension for gutter decorations
+		this.registerEditorExtension(this.gutterManager.createBookmarkGutter());
+
+		// Wait for layout to be ready before setting up views
+		this.app.workspace.onLayoutReady(() => {
+			// Add bookmark actions to existing markdown views
+			this.app.workspace.iterateAllLeaves((leaf) => {
+				if (leaf.view instanceof MarkdownView) {
+					this.setupView(leaf.view);
+				}
+			});
+
+			// Listen for new views being created
+			this.registerEvent(
+				this.app.workspace.on('active-leaf-change', () => {
+					this.handleActiveLeafChange();
+				})
+			);
 		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
-
-		// This adds a simple command that can be triggered anywhere
+		// Add command for toggle bookmark
 		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, _view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
+			id: 'toggle-bookmark',
+			name: 'Toggle bookmark',
+			editorCallback: (_editor, view) => {
+				if (view instanceof MarkdownView) {
+					this.toggleBookmark(view);
 				}
 			}
 		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
 	}
 
 	onunload() {
-
+		// Clean up all view actions
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			if (leaf.view instanceof MarkdownView) {
+				this.viewActionManager.removeActionFromView(leaf.view);
+			}
+		});
 	}
 
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+	// MARK: - Private Methods
+
+	private handleActiveLeafChange(): void {
+		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+		if (activeView) {
+			this.setupView(activeView);
+		}
 	}
 
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
-}
+	private setupView(view: MarkdownView): void {
+		// Add bookmark action if not already present
+		if (!this.viewActionManager.getActionElement(view)) {
+			this.viewActionManager.addActionToView(view, () => {
+				this.toggleBookmark(view);
+			});
+		}
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
+		// Check for existing bookmark and update icon
+		this.checkAndUpdateIcon(view);
 	}
 
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
+	private toggleBookmark(view: MarkdownView): void {
+		const editor = view.editor;
+		const content = editor.getValue();
+		const bookmarkState = this.bookmarkManager.findBookmark(content);
+
+		if (bookmarkState.hasBookmark && bookmarkState.lineNumber !== null) {
+			// Bookmark exists - jump to it, then remove after delay
+			this.bookmarkManager.jumpToBookmark(editor, bookmarkState.lineNumber);
+
+			// Wait 500ms before clearing bookmark to let user see the location
+			setTimeout(() => {
+				this.bookmarkManager.removeBookmark(editor);
+				this.viewActionManager.updateActionIcon(view, 'bookmark');
+			}, 500);
+		} else {
+			// No bookmark - set at current cursor position
+			this.bookmarkManager.insertBookmark(editor);
+			this.viewActionManager.updateActionIcon(view, 'bookmark-check');
+		}
 	}
-}
 
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+	private checkAndUpdateIcon(view: MarkdownView): void {
+		const content = view.editor.getValue();
+		const bookmarkState = this.bookmarkManager.findBookmark(content);
 
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
+		// Check for multiple bookmarks
+		if (this.bookmarkManager.checkForMultipleBookmarks(content)) {
+			// Will be handled by BookmarkManager
+		}
 
-	display(): void {
-		const {containerEl} = this;
-
-		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
+		const iconName = bookmarkState.hasBookmark ? 'bookmark-check' : 'bookmark';
+		this.viewActionManager.updateActionIcon(view, iconName);
 	}
 }
