@@ -48,11 +48,25 @@ class BookmarkDecorationPlugin implements PluginValue {
                 try {
                     const line = view.state.doc.line(index + 1);
                     if (line) {
+                        // Add line decoration for the bookmark icon
                         builder.add(
                             line.from,
                             line.from,
                             Decoration.line({ class: 'cm-bookmark-line' })
                         );
+
+                        // Hide the bookmark marker text
+                        const markerStart = lineContent.indexOf(BOOKMARK_MARKER);
+                        if (markerStart !== -1) {
+                            const absoluteMarkerStart = line.from + markerStart;
+                            const absoluteMarkerEnd = absoluteMarkerStart + BOOKMARK_MARKER.length;
+
+                            builder.add(
+                                absoluteMarkerStart,
+                                absoluteMarkerEnd,
+                                Decoration.mark({ class: 'cm-bookmark-marker-hidden' })
+                            );
+                        }
                     }
                 } catch (e) {
                     // Line might not exist, skip
