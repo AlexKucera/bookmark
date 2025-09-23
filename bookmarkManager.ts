@@ -1,8 +1,24 @@
 // ABOUTME: Core bookmark management logic for setting, finding, and removing bookmarks
 // ABOUTME: Handles marker insertion and detection in markdown content
 
-import { Editor, Notice } from 'obsidian';
-import { BOOKMARK_MARKER, BookmarkState, BookmarkInfo } from './constants';
+import { Editor, MarkdownView, Notice } from 'obsidian';
+import { BOOKMARK_MARKER, BookmarkState } from './constants';
+
+interface ScrollInfo {
+    top: number;
+    clientHeight?: number;
+    scrollHeight?: number;
+    height?: number;
+}
+
+interface CodeMirrorEditor {
+    dom?: HTMLElement;
+}
+
+interface ExtendedEditor extends Editor {
+    cm?: CodeMirrorEditor;
+    containerEl?: HTMLElement;
+}
 
 export class BookmarkManager {
     findBookmark(content: string): BookmarkState {
@@ -26,7 +42,7 @@ export class BookmarkManager {
     getFirstVisibleLine(editor: Editor): number {
         try {
             // For edit mode, use percentage-based approach like preview mode
-            const scrollInfo = editor.getScrollInfo() as any;
+            const scrollInfo = editor.getScrollInfo() as ScrollInfo;
             const totalLines = editor.lineCount();
 
             // Get scroll information - try multiple properties to find total content height
@@ -34,21 +50,21 @@ export class BookmarkManager {
             const viewportHeight = scrollInfo.clientHeight || 600;
 
             // Try to get total document height from CodeMirror
-            let totalContentHeight = scrollInfo.scrollHeight || scrollInfo.height;
+            let totalContentHeight = scrollInfo.scrollHeight || scrollInfo.height || viewportHeight;
 
             // Try alternative methods to get document height
             if (totalContentHeight <= viewportHeight) {
                 // Try to get the actual document height from various DOM elements
                 try {
                     // Try CodeMirror 6 approach first
-                    const editorView = (editor as any).cm;
+                    const editorView = (editor as ExtendedEditor).cm;
                     if (editorView && editorView.dom) {
                         totalContentHeight = editorView.dom.scrollHeight || totalContentHeight;
                     }
 
                     // If that doesn't work, try to find the scroll container
                     if (totalContentHeight <= viewportHeight) {
-                        const containerEl = (editor as any).containerEl;
+                        const containerEl = (editor as ExtendedEditor).containerEl;
                         if (containerEl) {
                             const scrollEl = containerEl.querySelector('.cm-editor') ||
                                            containerEl.querySelector('.cm-scroller') ||
@@ -59,14 +75,10 @@ export class BookmarkManager {
                         }
                     }
                 } catch (e) {
-                    console.log('Error getting DOM scroll height:', e);
+                    // Silently handle scroll height detection errors
                 }
             }
 
-            console.log('Edit mode detection: scroll top:', scrollTop, 'viewport height:', viewportHeight);
-            console.log('scrollInfo properties:', Object.keys(scrollInfo));
-            console.log('scrollHeight:', scrollInfo.scrollHeight, 'height:', scrollInfo.height);
-            console.log('Total content height after CM check:', totalContentHeight);
 
             // Calculate scroll percentage
             let scrollPercentage: number;
@@ -83,8 +95,6 @@ export class BookmarkManager {
             // Convert percentage to line number
             const estimatedLine = Math.floor(scrollPercentage * totalLines);
 
-            console.log('Total content height:', totalContentHeight, 'max scroll:', totalContentHeight - viewportHeight);
-            console.log('Scroll percentage:', scrollPercentage, 'estimated line:', estimatedLine, 'of', totalLines);
 
             // Ensure within bounds
             return Math.min(Math.max(0, estimatedLine), totalLines - 1);
@@ -93,7 +103,6 @@ export class BookmarkManager {
         }
 
         // Fallback to line 0
-        console.log('Fallback to line 0');
         return 0;
     }
 
@@ -175,7 +184,7 @@ export class BookmarkManager {
         return lineNumber;
     }
 
-    jumpToBookmark(editor: Editor, lineNumber: number, view?: any): void {
+    jumpToBookmark(editor: Editor, lineNumber: number, view?: MarkdownView): void {
         const pos = { line: lineNumber, ch: 0 };
 
         // Check if we have view context and are in preview mode
@@ -186,7 +195,6 @@ export class BookmarkManager {
                 const scrollPercentage = lineNumber / totalLines;
                 const targetScroll = scrollPercentage * 100; // Convert to percentage
 
-                console.log('Preview mode jump: line', lineNumber, 'of', totalLines, '-> scroll to', targetScroll + '%');
 
                 // Use preview mode scrolling
                 view.previewMode.applyScroll(targetScroll);

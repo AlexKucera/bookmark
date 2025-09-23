@@ -1,7 +1,7 @@
 // ABOUTME: Creates and manages CodeMirror line decorations for bookmarks
 // ABOUTME: Shows bookmark styling on bookmarked lines using line decorations
 
-import { Extension, StateEffect, StateField } from '@codemirror/state';
+import { Extension, StateEffect } from '@codemirror/state';
 import { EditorView, ViewUpdate, ViewPlugin, Decoration, DecorationSet, PluginValue } from '@codemirror/view';
 import { RangeSetBuilder } from '@codemirror/state';
 import { BOOKMARK_MARKER } from './constants';
@@ -24,7 +24,7 @@ class BookmarkDecorationPlugin implements PluginValue {
         }
 
         // Handle bookmark effects
-        for (let effect of update.transactions.flatMap(tr => tr.effects)) {
+        for (const effect of update.transactions.flatMap(tr => tr.effects)) {
             if (effect.is(updateBookmarkEffect)) {
                 this.decorations = this.buildDecorationsFromEffect(update.view, effect.value);
             }
