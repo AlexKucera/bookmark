@@ -24,5 +24,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Header action button with dynamic icon states
 - HTML marker-based bookmark storage for persistence
 
-[Unreleased]: https://github.com/AlexKucera/bookmark-plugin/compare/1.0.0...HEAD
-[1.0.0]: https://github.com/AlexKucera/bookmark-plugin/releases/tag/1.0.0
+[Unreleased]: https://github.com/AlexKucera/bookmark/compare/1.0.0...HEAD
+[1.0.0]: https://github.com/AlexKucera/bookmark/releases/tag/1.0.0

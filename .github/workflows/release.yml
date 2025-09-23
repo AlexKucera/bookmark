@@ -6,7 +6,7 @@ on:
       - '[0-9]+.[0-9]+.[0-9]+'
 
 env:
-  PLUGIN_NAME: bookmark-plugin
+  PLUGIN_NAME: bookmark
 
 jobs:
   build:

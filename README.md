@@ -1,8 +1,8 @@
-# Bookmark Plugin
+# Bookmark
 
-[![GitHub release](https://img.shields.io/github/v/release/AlexKucera/bookmark-plugin)](https://github.com/AlexKucera/bookmark-plugin/releases/latest)
+[![GitHub release](https://img.shields.io/github/v/release/AlexKucera/bookmark)](https://github.com/AlexKucera/bookmark/releases/latest)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Downloads](https://img.shields.io/github/downloads/AlexKucera/bookmark-plugin/total)](https://github.com/AlexKucera/bookmark-plugin/releases)
+[![Downloads](https://img.shields.io/github/downloads/AlexKucera/bookmark/total)](https://github.com/AlexKucera/bookmark/releases)
 ![Desktop & Mobile](https://img.shields.io/badge/Platform-Desktop%20%26%20Mobile-green)
 
 Add bookmarks to your Obsidian notes for quick navigation. Click the bookmark icon in the note header to set a bookmark, click again to jump back to it.
@@ -51,19 +51,19 @@ Perfect for researchers, writers, and anyone working with lengthy documents who 
 
 1. Open Obsidian Settings
 2. Go to Community Plugins and disable Safe Mode
-3. Click Browse and search for "Bookmark Plugin"
+3. Click Browse and search for "Bookmark"
 4. Install and enable the plugin
 
 ### Manual Installation from GitHub
 
-1. Download the latest release from [GitHub Releases](https://github.com/AlexKucera/bookmark-plugin/releases)
-2. Extract the contents to `{vault}/.obsidian/plugins/bookmark-plugin/`
+1. Download the latest release from [GitHub Releases](https://github.com/AlexKucera/bookmark/releases)
+2. Extract the contents to `{vault}/.obsidian/plugins/bookmark/`
 3. Reload Obsidian and enable the plugin in Community Plugins
 
 ### BRAT (Beta)
 
 1. Install the BRAT plugin
-2. Add this repository: `AlexKucera/bookmark-plugin`
+2. Add this repository: `AlexKucera/bookmark`
 3. Enable the plugin in Community Plugins
 
 ## Quick Start
@@ -119,8 +119,8 @@ This plugin is built with TypeScript and uses esbuild for bundling.
 
 ```bash
 # Clone the repository
-git clone https://github.com/AlexKucera/bookmark-plugin.git
-cd bookmark-plugin
+git clone https://github.com/AlexKucera/bookmark.git
+cd bookmark
 
 # Install dependencies
 npm install
