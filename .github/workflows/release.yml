@@ -1,0 +1,141 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+env:
+  PLUGIN_NAME: bookmark-plugin
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build plugin
+      run: npm run build
+
+    - name: Extract version from manifest
+      id: extract_version
+      run: |
+        VERSION=$(node -p "require('./manifest.json').version")
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Extract changelog for version
+      id: extract_changelog
+      run: |
+        VERSION=${{ steps.extract_version.outputs.VERSION }}
+
+        # Extract changelog section for this version
+        CHANGELOG_CONTENT=$(awk "
+        /^## \[$VERSION\]/ { found=1; next }
+        /^## \[/ && found { exit }
+        found && /^###/ { print; next }
+        found && !/^$/ { print }
+        " CHANGELOG.md | sed 's/^### /#### /')
+
+        # If no changelog found, use a default message
+        if [ -z "$CHANGELOG_CONTENT" ]; then
+          CHANGELOG_CONTENT="## What's New in v$VERSION"$'\n\n'"Please see the [full changelog](https://github.com/AlexKucera/${{ env.PLUGIN_NAME }}/blob/main/CHANGELOG.md) for details."
+        fi
+
+        # Create formatted release body
+        RELEASE_BODY="## 🔖 Bookmark Plugin v$VERSION"$'\n\n'"$CHANGELOG_CONTENT"$'\n\n'"## 📦 Installation"$'\n\n'"### Community Plugin Store (Recommended)"$'\n'"1. Open Obsidian Settings"$'\n'"2. Go to Community Plugins and disable Safe Mode"$'\n'"3. Click Browse and search for \"Bookmark Plugin\""$'\n'"4. Install and enable the plugin"$'\n\n'"### Manual Installation"$'\n'"1. Download \`${{ env.PLUGIN_NAME }}.zip\` from the assets below"$'\n'"2. Extract to \`{vault}/.obsidian/plugins/${{ env.PLUGIN_NAME }}/\`"$'\n'"3. Reload Obsidian and enable the plugin"$'\n\n'"---"$'\n'"💡 **Tip**: The plugin works out of the box with no configuration needed!"
+
+        # Save to output (handle multiline content properly)
+        {
+          echo 'RELEASE_BODY<<EOF'
+          echo "$RELEASE_BODY"
+          echo 'EOF'
+        } >> $GITHUB_OUTPUT
+
+    - name: Create ZIP package
+      run: |
+        npm install archiver
+        node -e "
+        const archiver = require('archiver');
+        const fs = require('fs');
+
+        const output = fs.createWriteStream('${{ env.PLUGIN_NAME }}.zip');
+        const archive = archiver('zip', { zlib: { level: 9 } });
+
+        output.on('close', () => {
+          console.log('ZIP created: ' + archive.pointer() + ' total bytes');
+        });
+
+        archive.on('error', (err) => {
+          throw err;
+        });
+
+        archive.pipe(output);
+        archive.file('main.js', { name: 'main.js' });
+        archive.file('manifest.json', { name: 'manifest.json' });
+        if (fs.existsSync('styles.css')) {
+          archive.file('styles.css', { name: 'styles.css' });
+        }
+        archive.finalize();
+        "
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: v${{ steps.extract_version.outputs.VERSION }}
+        body: ${{ steps.extract_changelog.outputs.RELEASE_BODY }}
+        draft: false
+        prerelease: false
+
+    - name: Upload main.js
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./main.js
+        asset_name: main.js
+        asset_content_type: application/javascript
+
+    - name: Upload manifest.json
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./manifest.json
+        asset_name: manifest.json
+        asset_content_type: application/json
+
+    - name: Upload styles.css (if exists)
+      if: hashFiles('styles.css') != ''
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./styles.css
+        asset_name: styles.css
+        asset_content_type: text/css
+
+    - name: Upload ZIP package
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./${{ env.PLUGIN_NAME }}.zip
+        asset_name: ${{ env.PLUGIN_NAME }}.zip
+        asset_content_type: application/zip
