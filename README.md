@@ -3,6 +3,7 @@
 [![GitHub release](https://img.shields.io/github/v/release/AlexKucera/bookmark)](https://github.com/AlexKucera/bookmark/releases/latest)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Downloads](https://img.shields.io/github/downloads/AlexKucera/bookmark/total)](https://github.com/AlexKucera/bookmark/releases)
+[![CodeRabbit Reviews](https://img.shields.io/coderabbit/prs/github/AlexKucera/bookmark](https://coderabbit.ai/)
 ![Desktop & Mobile](https://img.shields.io/badge/Platform-Desktop%20%26%20Mobile-green)
 
 Add bookmarks to your Obsidian notes for quick navigation. Click the bookmark icon in the note header to set a bookmark, click again to jump back to it.
