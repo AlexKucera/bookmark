@@ -25,7 +25,7 @@ export class BookmarkManager {
         const lines = content.split('\n');
 
         for (let i = 0; i < lines.length; i++) {
-            if (lines[i].contains(BOOKMARK_MARKER)) {
+            if (lines[i].includes(BOOKMARK_MARKER)) {
                 return {
                     hasBookmark: true,
                     lineNumber: i

@@ -18,15 +18,11 @@ class BookmarkDecorationPlugin implements PluginValue {
     }
 
     update(update: ViewUpdate) {
-        // Map decorations through document changes
-        if (update.docChanged) {
-            this.decorations = this.decorations.map(update.changes);
-        }
-
         // Handle bookmark effects
         for (const effect of update.transactions.flatMap(tr => tr.effects)) {
             if (effect.is(updateBookmarkEffect)) {
                 this.decorations = this.buildDecorationsFromEffect(update.view, effect.value);
+                return; // Early return to avoid rebuilding again
             }
         }
 

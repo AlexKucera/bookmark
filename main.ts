@@ -220,9 +220,8 @@ export default class BookmarkPlugin extends Plugin {
 		const bookmarkState = this.bookmarkManager.findBookmark(content);
 
 		// Check for multiple bookmarks
-		if (this.bookmarkManager.checkForMultipleBookmarks(content)) {
-			// Will be handled by BookmarkManager
-		}
+    // Check for multiple bookmarks (handled by BookmarkManager)
+    this.bookmarkManager.checkForMultipleBookmarks(content);
 
 		const iconName = bookmarkState.hasBookmark ? 'bookmark-check' : 'bookmark';
 		this.viewActionManager.updateActionIcon(view, iconName);
