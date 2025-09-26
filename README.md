@@ -64,7 +64,7 @@ Perfect for researchers, writers, and anyone working with lengthy documents who 
 ### BRAT (Beta)
 
 1. Install the BRAT plugin
-2. Add this repository: `AlexKucera/bookmark`
+2. Add this repository: `https://github.com/AlexKucera/bookmark`
 3. Enable the plugin in Community Plugins
 
 ## Quick Start
