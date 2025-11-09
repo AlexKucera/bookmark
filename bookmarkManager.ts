@@ -74,7 +74,7 @@ export class BookmarkManager {
                             }
                         }
                     }
-                } catch (e) {
+                } catch {
                     // Silently handle scroll height detection errors
                 }
             }
@@ -217,7 +217,7 @@ export class BookmarkManager {
         const hasMultiple = matches && matches.length > 1;
 
         if (hasMultiple) {
-            new Notice('Warning: Multiple bookmarks found. Please clean up manually.', 5000);
+            new Notice('Multiple bookmarks found. Please clean up manually.', 5000);
         }
 
         return !!hasMultiple;

@@ -11,7 +11,7 @@ export default class BookmarkPlugin extends Plugin {
 	private viewActionManager: ViewActionManager;
 	private gutterManager: GutterDecorationManager;
 
-	async onload() {
+	onload() {
 		// Initialize managers
 		this.bookmarkManager = new BookmarkManager();
 		this.viewActionManager = new ViewActionManager();
@@ -39,22 +39,22 @@ export default class BookmarkPlugin extends Plugin {
 
 		// Add command for toggle bookmark
 		this.addCommand({
-			id: 'toggle-bookmark',
-			name: 'Toggle bookmark',
+			id: 'toggle',
+			name: 'Toggle',
 			editorCallback: (_editor, view) => {
 				if (view instanceof MarkdownView) {
-					this.toggleBookmark(view);
+					void this.toggleBookmark(view);
 				}
 			}
 		});
 
 		// Add command to clean up multiple bookmarks
 		this.addCommand({
-			id: 'clean-bookmarks',
-			name: 'Clean up multiple bookmarks',
+			id: 'clean-multiple',
+			name: 'Clean up multiple',
 			editorCallback: (editor, view) => {
 				if (view instanceof MarkdownView) {
-					this.cleanupMultipleBookmarks(editor, view);
+					void this.cleanupMultipleBookmarks(editor, view);
 				}
 			}
 		});
@@ -82,7 +82,7 @@ export default class BookmarkPlugin extends Plugin {
 		// Add bookmark action if not already present
 		if (!this.viewActionManager.getActionElement(view)) {
 			this.viewActionManager.addActionToView(view, () => {
-				this.toggleBookmark(view);
+				void this.toggleBookmark(view);
 			});
 		}
 
@@ -101,26 +101,28 @@ export default class BookmarkPlugin extends Plugin {
 			this.bookmarkManager.jumpToBookmark(editor, bookmarkState.lineNumber, view);
 
 			// Wait 500ms before clearing bookmark to let user see the location
-			setTimeout(async () => {
-				const currentMode = view.getMode();
+			setTimeout(() => {
+				void (async () => {
+					const currentMode = view.getMode();
 
-				if (currentMode === 'preview') {
-					// In preview mode, temporarily switch to source to remove bookmark
-					try {
-						await view.setState({mode: 'source'}, {history: false});
-						this.bookmarkManager.removeBookmark(editor);
-						await view.setState({mode: 'preview'}, {history: false});
-					} catch (error) {
-						console.error('Failed to remove bookmark in preview mode:', error);
-						// Fallback: try direct removal
+					if (currentMode === 'preview') {
+						// In preview mode, temporarily switch to source to remove bookmark
+						try {
+							await view.setState({mode: 'source'}, {history: false});
+							this.bookmarkManager.removeBookmark(editor);
+							await view.setState({mode: 'preview'}, {history: false});
+						} catch (error) {
+							console.error('Failed to remove bookmark in preview mode:', error);
+							// Fallback: try direct removal
+							this.bookmarkManager.removeBookmark(editor);
+						}
+					} else {
+						// Edit mode - direct removal
 						this.bookmarkManager.removeBookmark(editor);
 					}
-				} else {
-					// Edit mode - direct removal
-					this.bookmarkManager.removeBookmark(editor);
-				}
 
-				this.viewActionManager.updateActionIcon(view, 'bookmark');
+					this.viewActionManager.updateActionIcon(view, 'bookmark');
+				})();
 			}, 500);
 		} else {
 			// No bookmark - set at visible line (works in both edit and preview modes)

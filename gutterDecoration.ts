@@ -64,7 +64,7 @@ class BookmarkDecorationPlugin implements PluginValue {
                             );
                         }
                     }
-                } catch (e) {
+                } catch {
                     // Line might not exist, skip
                 }
             }
@@ -86,7 +86,7 @@ class BookmarkDecorationPlugin implements PluginValue {
                         Decoration.line({ class: 'cm-bookmark-line' })
                     );
                 }
-            } catch (e) {
+            } catch {
                 // Line might not exist, skip
             }
         }
