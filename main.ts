@@ -7,6 +7,11 @@ import { ViewActionManager } from './viewActionManager';
 import { GutterDecorationManager } from './gutterDecoration';
 import { BOOKMARK_MARKER } from './constants';
 
+// Pre-escaped marker pattern for regex operations
+const ESCAPED_MARKER = BOOKMARK_MARKER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const MARKER_BEFORE_RE = new RegExp(`\\s*${ESCAPED_MARKER}`, 'g');
+const MARKER_AFTER_RE = new RegExp(`${ESCAPED_MARKER}\\s*`, 'g');
+
 export default class BookmarkPlugin extends Plugin {
 	private bookmarkManager: BookmarkManager;
 	private viewActionManager: ViewActionManager;
@@ -109,46 +114,49 @@ export default class BookmarkPlugin extends Plugin {
 			setTimeout(() => {
 				const originalFile = view.file;
 				void (async () => {
-					const currentMode = view.getMode();
+					try {
+						const currentMode = view.getMode();
 
-					if (currentMode === 'preview') {
-						// In preview mode, use Vault.process to modify the file
-						if (!originalFile) return;
-						await this.app.vault.process(originalFile, (content) => {
-							const bookmarkState = this.bookmarkManager.findBookmark(content);
-							if (bookmarkState.hasBookmark && bookmarkState.lineNumber !== null) {
-								const eol = content.includes('\r\n') ? '\r\n' : '\n';
-								const lines = content.split(/\r?\n/);
-								const lineContent = lines[bookmarkState.lineNumber];
-								if (lineContent === undefined) return content;
-								const markerIndex = lineContent.indexOf(BOOKMARK_MARKER);
-
-								if (markerIndex !== -1) {
-									// Remove the marker and any preceding space
-									let startPos = markerIndex;
-									if (startPos > 0 && lineContent[startPos - 1] === ' ') {
-										startPos--;
-									}
-									lines[bookmarkState.lineNumber] = lineContent.slice(0, startPos) + lineContent.slice(markerIndex + BOOKMARK_MARKER.length);
-								}
-								return lines.join(eol);
-							}
-							return content;
-						});
-					} else {
-						// Edit mode - direct removal
-						// If user switched files before the timeout, avoid mutating the wrong buffer.
-						if (originalFile && view.file?.path !== originalFile.path) {
-							const escapedMarker = BOOKMARK_MARKER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+						if (currentMode === 'preview') {
+							// In preview mode, use Vault.process to modify the file
+							if (!originalFile) return;
 							await this.app.vault.process(originalFile, (content) => {
-								return content.replace(new RegExp(`\\s*${escapedMarker}`, 'g'), '');
+								const bookmarkState = this.bookmarkManager.findBookmark(content);
+								if (bookmarkState.hasBookmark && bookmarkState.lineNumber !== null) {
+									const eol = content.includes('\r\n') ? '\r\n' : '\n';
+									const lines = content.split(/\r?\n/);
+									const lineContent = lines[bookmarkState.lineNumber];
+									if (lineContent === undefined) return content;
+									const markerIndex = lineContent.indexOf(BOOKMARK_MARKER);
+	
+									if (markerIndex !== -1) {
+										// Remove the marker and any preceding space
+										let startPos = markerIndex;
+										if (startPos > 0 && lineContent[startPos - 1] === ' ') {
+											startPos--;
+										}
+										lines[bookmarkState.lineNumber] = lineContent.slice(0, startPos) + lineContent.slice(markerIndex + BOOKMARK_MARKER.length);
+									}
+									return lines.join(eol);
+								}
+								return content;
 							});
 						} else {
-							this.bookmarkManager.removeBookmark(editor);
+							// Edit mode - direct removal
+							// If user switched files before the timeout, avoid mutating the wrong buffer.
+							if (originalFile && view.file?.path !== originalFile.path) {
+								await this.app.vault.process(originalFile, (content) => {
+									return content.replace(MARKER_BEFORE_RE, '');
+								});
+							} else {
+								this.bookmarkManager.removeBookmark(editor);
+							}
 						}
+	
+						this.viewActionManager.updateActionIcon(view, 'bookmark');
+					} catch (e) {
+						console.error('Failed to remove bookmark:', e);
 					}
-
-					this.viewActionManager.updateActionIcon(view, 'bookmark');
 				})();
 			}, 500);
 		} else {
@@ -240,9 +248,6 @@ export default class BookmarkPlugin extends Plugin {
 
 	private async cleanupMultipleBookmarks(editor: Editor, view: MarkdownView): Promise<void> {
 		const currentMode = view.getMode();
-		const escapedMarker = BOOKMARK_MARKER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-		const beforeRe = new RegExp(`\\s*${escapedMarker}`, 'g');
-		const afterRe = new RegExp(`${escapedMarker}\\s*`, 'g');
 
 		if (currentMode === 'preview') {
 			// In preview mode, use Vault.process to modify the file
@@ -250,15 +255,15 @@ export default class BookmarkPlugin extends Plugin {
 			await this.app.vault.process(view.file, (content) => {
 				// Remove all bookmark markers (both with and without spaces)
 				return content
-					.replace(beforeRe, '')
-					.replace(afterRe, '');
+					.replace(MARKER_BEFORE_RE, '')
+					.replace(MARKER_AFTER_RE, '');
 			});
 		} else {
 			// In source mode, use editor directly
 			const content = editor.getValue();
 			const cleanedContent = content
-				.replace(beforeRe, '')
-				.replace(afterRe, '');
+				.replace(MARKER_BEFORE_RE, '')
+				.replace(MARKER_AFTER_RE, '');
 			editor.setValue(cleanedContent);
 		}
 
