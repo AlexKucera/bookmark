@@ -47,6 +47,7 @@ export default class BookmarkPlugin extends Plugin {
 					return view instanceof MarkdownView;
 				}
 				void this.toggleBookmark(view as MarkdownView);
+				return true;
 			}
 		});
 
@@ -59,6 +60,7 @@ export default class BookmarkPlugin extends Plugin {
 					return view instanceof MarkdownView;
 				}
 				void this.cleanupMultipleBookmarks(editor, view as MarkdownView);
+				return true;
 			}
 		});
 	}
@@ -268,9 +270,8 @@ export default class BookmarkPlugin extends Plugin {
 		const content = view.editor.getValue();
 		const bookmarkState = this.bookmarkManager.findBookmark(content);
 
-		// Check for multiple bookmarks
-    // Check for multiple bookmarks (handled by BookmarkManager)
-    this.bookmarkManager.checkForMultipleBookmarks(content);
+		// Check for multiple bookmarks (handled by BookmarkManager)
+		this.bookmarkManager.checkForMultipleBookmarks(content);
 
 		const iconName = bookmarkState.hasBookmark ? 'bookmark-check' : 'bookmark';
 		this.viewActionManager.updateActionIcon(view, iconName);
