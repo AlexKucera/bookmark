@@ -8,9 +8,10 @@ import { GutterDecorationManager } from './gutterDecoration';
 import { BOOKMARK_MARKER } from './constants';
 
 // Pre-escaped marker pattern for regex operations
+// Marker is always inserted as " <!-- bookmark-marker -->" at end of line,
+// so we only need to match optional whitespace before the marker
 const ESCAPED_MARKER = BOOKMARK_MARKER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const MARKER_BEFORE_RE = new RegExp(`\\s*${ESCAPED_MARKER}`, 'g');
-const MARKER_AFTER_RE = new RegExp(`${ESCAPED_MARKER}\\s*`, 'g');
+const MARKER_CLEANUP_RE = new RegExp(`\\s*${ESCAPED_MARKER}`, 'g');
 
 export default class BookmarkPlugin extends Plugin {
 	private bookmarkManager: BookmarkManager;
@@ -130,9 +131,9 @@ export default class BookmarkPlugin extends Plugin {
 									const markerIndex = lineContent.indexOf(BOOKMARK_MARKER);
 	
 									if (markerIndex !== -1) {
-										// Remove the marker and any preceding space
+										// Remove the marker and all preceding whitespace (consistent with MARKER_CLEANUP_RE)
 										let startPos = markerIndex;
-										if (startPos > 0 && lineContent[startPos - 1] === ' ') {
+										while (startPos > 0 && lineContent[startPos - 1] === ' ') {
 											startPos--;
 										}
 										lines[bookmarkState.lineNumber] = lineContent.slice(0, startPos) + lineContent.slice(markerIndex + BOOKMARK_MARKER.length);
@@ -146,7 +147,7 @@ export default class BookmarkPlugin extends Plugin {
 							// If user switched files before the timeout, avoid mutating the wrong buffer.
 							if (originalFile && view.file?.path !== originalFile.path) {
 								await this.app.vault.process(originalFile, (content) => {
-									return content.replace(MARKER_BEFORE_RE, '');
+									return content.replace(MARKER_CLEANUP_RE, '');
 								});
 							} else {
 								this.bookmarkManager.removeBookmark(editor);
@@ -253,17 +254,13 @@ export default class BookmarkPlugin extends Plugin {
 			// In preview mode, use Vault.process to modify the file
 			if (!view.file) return;
 			await this.app.vault.process(view.file, (content) => {
-				// Remove all bookmark markers (both with and without spaces)
-				return content
-					.replace(MARKER_BEFORE_RE, '')
-					.replace(MARKER_AFTER_RE, '');
+				// Remove all bookmark markers with any preceding whitespace
+				return content.replace(MARKER_CLEANUP_RE, '');
 			});
 		} else {
 			// In source mode, use editor directly
 			const content = editor.getValue();
-			const cleanedContent = content
-				.replace(MARKER_BEFORE_RE, '')
-				.replace(MARKER_AFTER_RE, '');
+			const cleanedContent = content.replace(MARKER_CLEANUP_RE, '');
 			editor.setValue(cleanedContent);
 		}
 
@@ -275,7 +272,8 @@ export default class BookmarkPlugin extends Plugin {
 		const content = view.editor.getValue();
 		const bookmarkState = this.bookmarkManager.findBookmark(content);
 
-		// Check for multiple bookmarks (handled by BookmarkManager)
+		// Check for multiple bookmarks and show notice to user if detected
+		// (user must manually run "Clean up multiple" command to resolve)
 		this.bookmarkManager.checkForMultipleBookmarks(content);
 
 		const iconName = bookmarkState.hasBookmark ? 'bookmark-check' : 'bookmark';
