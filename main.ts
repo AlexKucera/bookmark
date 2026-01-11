@@ -128,16 +128,9 @@ export default class BookmarkPlugin extends Plugin {
 									const lines = content.split(/\r?\n/);
 									const lineContent = lines[bookmarkState.lineNumber];
 									if (lineContent === undefined) return content;
-									const markerIndex = lineContent.indexOf(BOOKMARK_MARKER);
-	
-									if (markerIndex !== -1) {
-										// Remove the marker and all preceding whitespace (consistent with MARKER_CLEANUP_RE)
-										let startPos = markerIndex;
-										while (startPos > 0 && lineContent[startPos - 1] === ' ') {
-											startPos--;
-										}
-										lines[bookmarkState.lineNumber] = lineContent.slice(0, startPos) + lineContent.slice(markerIndex + BOOKMARK_MARKER.length);
-									}
+
+									// Remove the marker and all preceding whitespace using same regex as other cleanup paths
+									lines[bookmarkState.lineNumber] = lineContent.replace(MARKER_CLEANUP_RE, '');
 									return lines.join(eol);
 								}
 								return content;
