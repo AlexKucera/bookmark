@@ -5,6 +5,13 @@ import { Editor, MarkdownView, Plugin } from 'obsidian';
 import { BookmarkManager } from './bookmarkManager';
 import { ViewActionManager } from './viewActionManager';
 import { GutterDecorationManager } from './gutterDecoration';
+import { BOOKMARK_MARKER } from './constants';
+
+// Pre-escaped marker pattern for regex operations
+// Marker is always inserted as " <!-- bookmark-marker -->" at end of line,
+// so we only need to match optional whitespace before the marker
+const ESCAPED_MARKER = BOOKMARK_MARKER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const MARKER_CLEANUP_RE = new RegExp(`\\s*${ESCAPED_MARKER}`, 'g');
 
 export default class BookmarkPlugin extends Plugin {
 	private bookmarkManager: BookmarkManager;
@@ -41,10 +48,12 @@ export default class BookmarkPlugin extends Plugin {
 		this.addCommand({
 			id: 'toggle',
 			name: 'Toggle',
-			editorCallback: (_editor, view) => {
-				if (view instanceof MarkdownView) {
-					void this.toggleBookmark(view);
+			editorCheckCallback: (checking, _editor, view) => {
+				if (checking) {
+					return view instanceof MarkdownView;
 				}
+				void this.toggleBookmark(view as MarkdownView);
+				return true;
 			}
 		});
 
@@ -52,10 +61,12 @@ export default class BookmarkPlugin extends Plugin {
 		this.addCommand({
 			id: 'clean-multiple',
 			name: 'Clean up multiple',
-			editorCallback: (editor, view) => {
-				if (view instanceof MarkdownView) {
-					void this.cleanupMultipleBookmarks(editor, view);
+			editorCheckCallback: (checking, editor, view) => {
+				if (checking) {
+					return view instanceof MarkdownView;
 				}
+				void this.cleanupMultipleBookmarks(editor, view as MarkdownView);
+				return true;
 			}
 		});
 	}
@@ -102,26 +113,44 @@ export default class BookmarkPlugin extends Plugin {
 
 			// Wait 500ms before clearing bookmark to let user see the location
 			setTimeout(() => {
+				const originalFile = view.file;
 				void (async () => {
-					const currentMode = view.getMode();
+					try {
+						const currentMode = view.getMode();
 
-					if (currentMode === 'preview') {
-						// In preview mode, temporarily switch to source to remove bookmark
-						try {
-							await view.setState({mode: 'source'}, {history: false});
-							this.bookmarkManager.removeBookmark(editor);
-							await view.setState({mode: 'preview'}, {history: false});
-						} catch (error) {
-							console.error('Failed to remove bookmark in preview mode:', error);
-							// Fallback: try direct removal
-							this.bookmarkManager.removeBookmark(editor);
+						if (currentMode === 'preview') {
+							// In preview mode, use Vault.process to modify the file
+							if (!originalFile) return;
+							await this.app.vault.process(originalFile, (content) => {
+								const bookmarkState = this.bookmarkManager.findBookmark(content);
+								if (bookmarkState.hasBookmark && bookmarkState.lineNumber !== null) {
+									const eol = content.includes('\r\n') ? '\r\n' : '\n';
+									const lines = content.split(/\r?\n/);
+									const lineContent = lines[bookmarkState.lineNumber];
+									if (lineContent === undefined) return content;
+
+									// Remove the marker and all preceding whitespace using same regex as other cleanup paths
+									lines[bookmarkState.lineNumber] = lineContent.replace(MARKER_CLEANUP_RE, '');
+									return lines.join(eol);
+								}
+								return content;
+							});
+						} else {
+							// Edit mode - direct removal
+							// If user switched files before the timeout, avoid mutating the wrong buffer.
+							if (originalFile && view.file?.path !== originalFile.path) {
+								await this.app.vault.process(originalFile, (content) => {
+									return content.replace(MARKER_CLEANUP_RE, '');
+								});
+							} else {
+								this.bookmarkManager.removeBookmark(editor);
+							}
 						}
-					} else {
-						// Edit mode - direct removal
-						this.bookmarkManager.removeBookmark(editor);
+	
+						this.viewActionManager.updateActionIcon(view, 'bookmark');
+					} catch (e) {
+						console.error('Failed to remove bookmark:', e);
 					}
-
-					this.viewActionManager.updateActionIcon(view, 'bookmark');
 				})();
 			}, 500);
 		} else {
@@ -129,26 +158,45 @@ export default class BookmarkPlugin extends Plugin {
 			const mode = view.getMode();
 
 			if (mode === 'preview') {
-				// In preview mode, we need to temporarily switch to source mode to insert bookmark
+				// In preview mode, use Vault.process to modify the file
 				const visibleLine = this.getVisibleLineInPreview(view);
 
-				try {
-					// Temporarily switch to source mode for bookmark insertion
-					await view.setState({mode: 'source'}, {history: false});
+				if (!view.file) return;
+				await this.app.vault.process(view.file, (content) => {
+					const eol = content.includes('\r\n') ? '\r\n' : '\n';
+					const lines = content.split(/\r?\n/);
+					let targetLine = Math.min(visibleLine, lines.length - 1);
 
-					// Insert bookmark
-					this.bookmarkManager.insertBookmark(editor, visibleLine);
+					// Parse frontmatter to find end index
+					let frontmatterEndIndex = -1;
+					if (lines[0] === '---') {
+						for (let i = 1; i < lines.length; i++) {
+							if (lines[i] === '---') {
+								frontmatterEndIndex = i;
+								break;
+							}
+						}
+					}
 
-					// Switch back to preview mode
-					await view.setState({mode: 'preview'}, {history: false});
+					// If visibleLine is inside frontmatter, set targetLine to first line after closing '---'
+					if (frontmatterEndIndex !== -1 && targetLine <= frontmatterEndIndex) {
+						targetLine = Math.min(frontmatterEndIndex + 1, lines.length - 1);
+					}
 
-				} catch (error) {
-					console.error('Failed to insert bookmark in preview mode:', error);
-					// Try direct insertion as fallback
-					this.bookmarkManager.insertBookmark(editor, visibleLine);
-				}
+					// Ensure target line is valid
+					targetLine = Math.max(0, Math.min(targetLine, lines.length - 1));
+
+					// Re-derive the line content and check if it already contains the marker
+					const lineContent = lines[targetLine];
+					if (!lineContent.includes(BOOKMARK_MARKER)) {
+						// Insert bookmark at end of line
+						lines[targetLine] = lineContent + ' ' + BOOKMARK_MARKER;
+					}
+
+					return lines.join(eol);
+				});
 			} else {
-				// In source/edit mode, use auto-detection
+				// In source/edit mode, use auto-detection with full bookmark manager logic
 				const detectedLine = this.bookmarkManager.getFirstVisibleLine(editor);
 				this.bookmarkManager.insertBookmark(editor, detectedLine);
 			}
@@ -196,21 +244,17 @@ export default class BookmarkPlugin extends Plugin {
 		const currentMode = view.getMode();
 
 		if (currentMode === 'preview') {
-			// Switch to source mode for cleanup
-			await view.setState({mode: 'source'}, {history: false});
-		}
-
-		// Remove all bookmark markers (both with and without spaces)
-		const content = editor.getValue();
-		const cleanedContent = content
-			.replace(/\s*<!-- bookmark-marker -->/g, '')
-			.replace(/<!-- bookmark-marker -->\s*/g, '');
-
-		editor.setValue(cleanedContent);
-
-		if (currentMode === 'preview') {
-			// Switch back to preview mode
-			await view.setState({mode: 'preview'}, {history: false});
+			// In preview mode, use Vault.process to modify the file
+			if (!view.file) return;
+			await this.app.vault.process(view.file, (content) => {
+				// Remove all bookmark markers with any preceding whitespace
+				return content.replace(MARKER_CLEANUP_RE, '');
+			});
+		} else {
+			// In source mode, use editor directly
+			const content = editor.getValue();
+			const cleanedContent = content.replace(MARKER_CLEANUP_RE, '');
+			editor.setValue(cleanedContent);
 		}
 
 		// Update icon
@@ -221,9 +265,9 @@ export default class BookmarkPlugin extends Plugin {
 		const content = view.editor.getValue();
 		const bookmarkState = this.bookmarkManager.findBookmark(content);
 
-		// Check for multiple bookmarks
-    // Check for multiple bookmarks (handled by BookmarkManager)
-    this.bookmarkManager.checkForMultipleBookmarks(content);
+		// Check for multiple bookmarks and show notice to user if detected
+		// (user must manually run "Clean up multiple" command to resolve)
+		this.bookmarkManager.checkForMultipleBookmarks(content);
 
 		const iconName = bookmarkState.hasBookmark ? 'bookmark-check' : 'bookmark';
 		this.viewActionManager.updateActionIcon(view, iconName);
